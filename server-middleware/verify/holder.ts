@@ -427,7 +427,7 @@ function randomIntFromInterval(min: number, max: number) {
 // specified in the config map
 export async function getHodlerWallet(walletAddress: string, config: any) {
     //Solana connection setup
-    const cluster: Cluster = process.env.SOLANA_NETWORK === "mainnet-beta" ? "mainnet-beta" : "devnet";
+    const cluster: Cluster = process.env.SOLANA_NETWORK === "devnet" ? "devnet" : "mainnet-beta";
     let endpoint: string = process.env.SOLANA_RPC_HOST || clusterApiUrl(cluster);
     const connection: Connection = new Connection(endpoint, { commitment: "confirmed", disableRetryOnRateLimit: true });
 
