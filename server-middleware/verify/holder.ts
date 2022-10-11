@@ -1,6 +1,7 @@
 
 const axios = require('axios')
 const { base58_to_binary } = require('base58-js')
+import { Cluster, clusterApiUrl, Connection, PublicKey } from '@solana/web3.js'
 import { getDiscordClient } from '../discord/client'
 import { getLastTransaction } from '../solscan/account'
 import { write } from '../storage/persist'
@@ -8,7 +9,6 @@ import { getConfigFilePath, getHodlerFilePath } from '../verify/paths'
 import { getConfig, getHodlerList } from '../verify/project'
 const { getParsedNftAccountsByOwner } = require('@nfteyez/sol-rayz')
 const nacl = require('tweetnacl')
-const { PublicKey } = require('@solana/web3.js')
 const loggerWithLabel = require('../logger/structured')
 
 /**
@@ -426,6 +426,10 @@ function randomIntFromInterval(min: number, max: number) {
 // inspects a holder's wallet for NFTs and SPL tokens matching the criteria
 // specified in the config map
 export async function getHodlerWallet(walletAddress: string, config: any) {
+    //Solana connection setup
+    const cluster: Cluster = process.env.SOLANA_NETWORK === "mainnet-beta" ? "mainnet-beta" : "devnet";
+    let endpoint: string = process.env.SOLANA_RPC_HOST || clusterApiUrl(cluster);
+    const connection: Connection = new Connection(endpoint, { commitment: "confirmed", disableRetryOnRateLimit: true });
 
     // initialize an empty wallet to be returned
     let nfts: any[] = [];
@@ -439,7 +443,7 @@ export async function getHodlerWallet(walletAddress: string, config: any) {
     var maxRetries = 10
     for (var i = 0; i < maxRetries; i++) {
         try {
-            tokenList = await getParsedNftAccountsByOwner({ publicAddress: walletAddress })
+            tokenList = await getParsedNftAccountsByOwner({ connection, publicAddress: walletAddress })
             break
         } catch (e) {
             var retryNumber = i + 1

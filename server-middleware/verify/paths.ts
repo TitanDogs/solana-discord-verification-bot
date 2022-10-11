@@ -3,7 +3,11 @@ export function getHodlerFilePath(name: any) {
 }
 
 export function getConfigFilePath(name: any) {
-    return `./config/prod-${name}.json`
+    if (name.includes("prod-")) {
+        return `./config/${name}.json`
+    } else {
+        return `./config/prod-${name}.json`
+    }
 }
 
 export function getVoteFilePath(project: any) {
