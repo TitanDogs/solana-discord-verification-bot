@@ -12,7 +12,7 @@
           <v-dialog
             v-model="dialog"
             persistent
-            max-width="290"
+            max-width="305"
           >
             <template v-slot:activator="{ on, attrs }">
               <v-btn
@@ -32,6 +32,7 @@
               <v-card-actions>
                 <v-btn color="green darken-1" text @click="connectWallet('phantom')">Phantom</v-btn>
                 <v-btn color="green darken-1" text @click="connectWallet('solflare')">Solflare</v-btn>
+                <v-btn color="green darken-1" text @click="connectWallet('slope')">Slope</v-btn>
               </v-card-actions>
             </v-card>
           </v-dialog>
@@ -148,10 +149,7 @@
         </div>
     </div>
     <div class="block text-gray-700 text-sm" v-if="step === 11">
-      We're having trouble connecting to your wallet. The currently supported wallet configurations are <a class="hyperlink" href="https://phantom.app">Phantom</a> and <a class="hyperlink" href="https://solflare.com">Solflare</a> browser extensions on a desktop or laptop device. Mobile support coming soon, and we are working to add support for additional wallet vendors!
-      <br>
-      <br>
-      Please ensure Phantom is available on your device and try again.
+      We're having trouble connecting to your wallet. The currently supported wallets are <a class="hyperlink" href="https://phantom.app">Phantom</a>, <a class="hyperlink" href="https://solflare.com">Solflare</a> and <a class="hyperlink" href="https://slope.finance">Slope</a>. When using a mobile device, please ensure the current browser is supported by your wallet.
     </div>
     <div v-if="this.configResponse">
         <h2 class="block text-gray-700 text-xl font-bold mb-2 mt-5">Discord Verification Service</h2>
@@ -197,6 +195,54 @@
             🚫 Custom Twitter notification bot (<a class="hyperlink" href="https://mint.nft4cause.app">unlock</a>)
           </div>
         </div>
+        <h2 class="block text-gray-700 text-xl font-bold mb-2 mt-5">Voting</h2>
+        <div v-if="this.is_holder">
+          <div class="block text-gray-700 text-sm mb-2">
+            ✅ <a class=hyperlink :href="this.discord_redirect_url+'/vote'">{{discord_redirect_url}}/vote</a>
+          </div>
+          <div class="block text-gray-700 text-sm mb-2">
+            <v-dialog
+              v-model="voteDialog"
+              persistent
+              max-width="305"
+            >
+              <template v-slot:activator="{ on, attrs }">
+                <a href="#" @click="voteDialog=true">➕ Create new vote</a>
+              </template>
+              <v-card>
+                <v-card-title class="text-h5">
+                  Create vote
+                </v-card-title>
+                <v-card-text>Create a vote below. Please note, votes cannot be modified. Once the first vote is cast a vote cannot be deleted.</v-card-text>
+                <v-card-text>
+                  <input class="mb-1 shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" type="text" v-model="voteTitle" placeholder="Vote question">
+                  <input class="mb-1 shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" type="text" v-model="voteChoices" placeholder="Vote choices (choice 1, choice 2)">
+                  <v-select
+                    v-model="voteExpiryTime"
+                    :items="voteExpiryTimeItems"
+                    attach
+                    label="Days until close"
+                  ></v-select>
+                  <v-select
+                    v-model="voteRequiredRoles"
+                    :items="voteRequiredItems"
+                    attach
+                    chips
+                    label="Eligible roles"
+                    multiple
+                  ></v-select>
+                </v-card-text>
+                <v-card-actions>
+                  <v-btn color="green darken-1" text @click="createVote()">Create</v-btn>
+                  <v-btn color="green darken-1" text @click="voteDialog=false">Cancel</v-btn>
+                </v-card-actions>
+              </v-card>
+            </v-dialog>
+          </div>
+        </div>
+        <div v-if="!this.is_holder" class="block text-gray-700 text-sm mb-2">
+          🚫 Holder only voting service (<a class="hyperlink" href="https://mint.nft4cause.app">unlock</a>)
+        </div>
     </div>
   </div>
 </template>
@@ -210,6 +256,7 @@ const { binary_to_base58 } = require('base58-js')
 export default Vue.extend({
   data() {
     return {
+      voteDialog: false,
       discordUsername: '',
       step: 0,
       discordAvatar: '',
@@ -239,7 +286,13 @@ export default Vue.extend({
         required_balance: '',
         key: '',
         value: ''
-      }]
+      }],
+      voteTitle: '',
+      voteExpiryTime: '',
+      voteExpiryTimeItems: ["1","2","3","4","5","6","7","8","9","10"],
+      voteRequiredItems: [],
+      voteRequiredRoles: [],
+      voteChoices: '',
     }
   },
   async mounted() {
@@ -261,6 +314,31 @@ export default Vue.extend({
     }
   },
   methods: {
+    async createVote() {
+      try {
+        var res = await axios.post('/api/createProjectVote', {
+          signature: this.signature,
+          publicKey: this.publicKey,
+          // @ts-ignore
+          project: this.project,
+          // @ts-ignore
+          title: this.voteTitle,
+          // @ts-ignore
+          expiryTime: this.voteExpiryTime,
+          // @ts-ignore
+          requiredRoles: this.voteRequiredRoles,
+          // @ts-ignore
+          choices: this.voteChoices.split(",")
+        })
+        this.voteTitle = ""
+        this.voteExpiryTime = "1"
+        this.voteChoices = ""
+        this.voteDialog = false
+        this.goToVoting()
+      } catch(e) {
+        console.log("error saving vote", e)
+      }
+    },
     async disconnectWallet() {
       try {
         let res = await axios.get('/api/disconnectWallet')
@@ -282,6 +360,9 @@ export default Vue.extend({
           if (walletType == "phantom") {
             // connect to phantom wallet
             wallet = window.solana
+          } else if (walletType == "slope"){
+            // connect to slope wallet
+            wallet = new window.Slope()
           } else {
             // connect to solflare wallet
             wallet = new Solflare();
@@ -295,11 +376,19 @@ export default Vue.extend({
           const message = this.$config.message
           const encodedMessage = new TextEncoder().encode(message)
           const signedMessage = await wallet.signMessage(encodedMessage, 'utf8')
-          this.signature = binary_to_base58((signedMessage.signature)?signedMessage.signature:signedMessage)
-          console.log(`signed message ${this.signature}`)
-          // @ts-ignore
-          this.publicKey = wallet.publicKey.toString()
-
+          
+          // determine b58 encoded signature
+          if (signedMessage.data && signedMessage.data.signature) {
+            // slope format
+            this.signature = signedMessage.data.signature
+            this.publicKey = signedMessage.data.publicKey
+          } else {
+            // phantom and solflare format
+            this.signature = binary_to_base58((signedMessage.signature)?signedMessage.signature:signedMessage)
+            this.publicKey = wallet.publicKey.toString()
+          }
+          console.log(`publicKey=${this.publicKey}, signature=${this.signature}`)
+          
           // pre-validate the signature
           try {
             let res = await axios.post('/api/connectWallet', {
@@ -353,12 +442,30 @@ export default Vue.extend({
         if (res.data.discord_roles && res.data.discord_roles.length > 0) { 
           this.discord_roles = res.data.discord_roles
         }
+        this.populateVoteDropdowns()
       }
       this.step = 3
+    },
+    populateVoteDropdowns() {
+      var roles : string[] = []
+      roles.push(this.discord_role_id)
+      if (this.discord_roles) {  
+        for (var i=0; i < this.discord_roles.length; i++) {
+          roles.push(this.discord_roles[i].discord_role_id)
+        }
+      }
+      // @ts-ignore
+      this.voteRequiredItems = roles
+      // @ts-ignore
+      this.voteRequiredRoles.push(this.discord_role_id)
+      this.voteExpiryTime = "1"
     },
     goToManage(){
       this.$router.push('/manage');
       this.step = 3
+    },
+    goToVoting(){
+      this.$router.push('/' + this.project + '/vote');
     },
     add () {
       this.discord_roles.push({
@@ -421,6 +528,7 @@ export default Vue.extend({
             // @ts-ignore
             this.discord_remaining_verifications = this.$config.max_free_verifications - res.data.verifications
           }
+          this.populateVoteDropdowns()
         } catch(e) {
             if (e.toString().includes("status code 409")) {
               this.step = 9

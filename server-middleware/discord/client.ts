@@ -1,7 +1,7 @@
 
 const { Client, Intents } = require('discord.js')
 const loggerWithLabel = require('../logger/structured')
-import { getAllProjects, getConfig } from '../verify/project'
+import { getConfig } from '../verify/project'
 
 /**
  * Configure logging
@@ -10,7 +10,37 @@ const logger = loggerWithLabel("discord")
 
 // Cache of discord clients available on this server
 const discordClients = new Map<any, any>()
-export var cronDiscordClientRunning = false
+
+// Retrieve the name of a discord role with given ID
+export async function getRoleName(projectName: any, roleID: any) {
+
+    // retrieve existing config if available
+    logger.info(`retrieving role name for ID ${roleID} in project ${projectName}`)
+    var config = await getConfig(projectName)
+    const client = discordClients.get(projectName)
+    if (!client) {
+        logger.info(`unable to get client for ${projectName}`)
+        return ""
+    }
+
+    // retrieve the server
+    const myGuild = await client.guilds.cache.get(config.discord_server_id)
+    if (!myGuild) {
+        logger.info(`unable to retrieve server ${config.discord_server_id} in project ${projectName}`)
+        return ""
+    }
+
+    // retrieve the role name
+    const role = await myGuild.roles.cache.find((r: any) => r.id === roleID)
+    if (!role) {
+        logger.info(`unable to retrieve role ID ${roleID} on server ${config.discord_server_id} in project ${projectName}`)
+        return ""
+    }
+
+    // return the role name
+    logger.info(`found role name ${role.name} for ID ${roleID} in project ${projectName}`)
+    return role.name
+}
 
 // Lazy load clients as required
 export async function getDiscordClient(projectName: any) {
@@ -72,31 +102,4 @@ export async function getDiscordClient(projectName: any) {
     // getting here means an error
     logger.info(`client ${projectName} was not initialized`)
     return null
-}
-
-// Retrieves the current list of known discord clients
-export function getAllDiscordClients() {
-    return discordClients
-}
-
-// Query project list and retrieve all discord clients
-export async function loadAllDiscordClients() {
-    logger.info("loading all projects to initialize discord clients")
-    try {
-        cronDiscordClientRunning = true
-        var allProjects = await getAllProjects()
-        logger.info("retrieved projects", allProjects.length)
-        for (var i = 0; i < allProjects.length; i++) {
-            try {
-                logger.info(`initializing client: ${allProjects[i]}`)
-                await getDiscordClient(allProjects[i])
-            } catch (e1) {
-                logger.info(`error loading client for project ${allProjects[i]}`, e1)
-            }
-        }
-    } catch (e) {
-        logger.info("error retrieving projects", e)
-    }
-    cronDiscordClientRunning = false
-    return discordClients
 }
